@@ -1,0 +1,23 @@
+# Core Deep Learning Framework
+torch>=2.0.0
+torchvision
+torchaudio
+
+# Medical Imaging Specialized Libraries
+monai>=1.2.0
+nibabel>=5.0.0
+scikit-image
+
+# Data Processing and Numerical Operations
+numpy<2.0.0
+pandas
+scipy
+
+# Visualization and Progress Tracking
+matplotlib
+tensorboard
+tqdm
+
+# Utilities
+scikit-learn
+h5py
