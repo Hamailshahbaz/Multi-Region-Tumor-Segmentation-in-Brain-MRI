@@ -31,5 +31,24 @@ An advanced variant that integrates **Attention Gates (AGs)** within the skip co
 3.  **Inference:** Sliding window inference for full-volume reconstruction.
 4.  **Evaluation:** Statistical analysis of performance across different tumor sub-regions.
 
+## STRUCTURE
+```text
+/project_root
+├── data/
+│   ├── BraTS2020_TrainingData/
+│   └── BraTS2020_ValidationData/
+├── src/
+│   ├── data_loader.py
+│   ├── model.py
+│   ├── losses.py
+│   └── train.py
+├── results/
+│   ├── models/
+│   ├── plots/
+│   └── qualitative/
+├── requirements.txt
+└── README.md
+```
+
 ## Dataset
 This work utilizes the **BraTS 2020 (Brain Tumor Segmentation Challenge)** dataset, comprising 369 multi-institutional MRI scans with expert-annotated labels.
