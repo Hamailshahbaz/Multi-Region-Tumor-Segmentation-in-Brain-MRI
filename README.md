@@ -51,4 +51,4 @@ An advanced variant that integrates **Attention Gates (AGs)** within the skip co
 ```
 
 ## Dataset
-This work utilizes the **BraTS 2020 (Brain Tumor Segmentation Challenge)** dataset, comprising 369 multi-institutional MRI scans with expert-annotated labels.
+This work utilizes the **BraTS 2020 (Brain Tumor Segmentation Challenge)** dataset, comprising 369 multi-institutional MRI scans with expert-annotated labels. (https://www.kaggle.com/datasets/awsaf49/brats20-dataset-training-validation)
