@@ -94,9 +94,20 @@ class AttentionGate3D(nn.Module):
         
         self.relu = nn.ReLU(inplace=True)
 
+    # Inside AttentionGate3D forward
     def forward(self, g, l):
         g1 = self.W_g(g)
         l1 = self.W_l(l)
+        
+        # Check if dimensions match; if not, pad g1 to match l1
+        if g1.size() != l1.size():
+            diffZ = l1.size()[2] - g1.size()[2]
+            diffY = l1.size()[3] - g1.size()[3]
+            diffX = l1.size()[4] - g1.size()[4]
+            g1 = torch.nn.functional.pad(g1, [diffX // 2, diffX - diffX // 2,
+                                            diffY // 2, diffY - diffY // 2,
+                                            diffZ // 2, diffZ - diffZ // 2])
+
         q = self.relu(g1 + l1)
         attention_weights = self.psi(q)
         return l * attention_weights
