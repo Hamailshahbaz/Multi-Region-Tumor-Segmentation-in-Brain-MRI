@@ -44,48 +44,54 @@ class BraTSDataset(Dataset):
         return padded_image[:, :target_shape[0], :target_shape[1], :target_shape[2]]
     
     def __getitem__(self, idx):
-        #finds the corresponding patient ID from your list (e.g., BraTS20_Training_001)
-        p_id = self.patient_list[idx] 
-
-        # 1. Load Modalities
-        flair = self._load_nifti(p_id, "flair")
-        t1ce  = self._load_nifti(p_id, "t1ce")
-        t1    = self._load_nifti(p_id, "t1")
-        t2    = self._load_nifti(p_id, "t2")
-
-        # 2. Stack to (4, D, H, W) 
-        #PyTorch prefer (Channels, Depth, Height, Width) format
-        # It loads 4 separate MRI files and stacks them into one 4-channel array.
-        # why? 
-        #A single MRI isn't enough. For example, FLAIR shows the edema, but T1ce shows the active tumor core.
-        # By stacking them, the model sees all 4 "views" at once, 
-        # similar to how a color photo has Red, Green, and Blue channels.
-        image = np.stack([flair, t1ce, t1, t2], axis=0)
-
-        # 3. Load Mask & Map to Nested Regions
-        mask = self._load_nifti(p_id, "seg")
-        
-        # Whole Tumor (WT): Labels 1, 2, 4[cite: 1]
-        wt = (mask > 0).astype(np.float32)
-        # Tumor Core (TC): Labels 1, 4[cite: 1]
-        tc = np.logical_or(mask == 1, mask == 4).astype(np.float32)
-        # Enhancing Tumor (ET): Label 4[cite: 1]
-        et = (mask == 4).astype(np.float32)
-
-        combined_mask = np.stack([wt, tc, et], axis=0)
-
-        image = self.pad_image(image)
-        combined_mask = self.pad_image(combined_mask)
-
-        # 4. Z-Score Normalization (Per Channel)[cite: 1]
-        image = self.normalize(image)
-
-        # Convert to Tensors
-        image = torch.from_numpy(image).float()
-        combined_mask = torch.from_numpy(combined_mask).float()
-
-        return image, combined_mask
-
+        try:
+            # Finds the corresponding patient ID from your list (e.g., BraTS20_Training_001)
+            p_id = self.patient_list[idx] 
+    
+            # 1. Load Modalities
+            # These highlight different tissue properties (edema, active core, etc.)
+            flair = self._load_nifti(p_id, "flair")
+            t1ce  = self._load_nifti(p_id, "t1ce")
+            t1    = self._load_nifti(p_id, "t1")
+            t2    = self._load_nifti(p_id, "t2")
+    
+            # 2. Stack to (4, D, H, W) 
+            # Stacking allows the model to see all 4 "views" at once, similar to RGB channels
+            image = np.stack([flair, t1ce, t1, t2], axis=0)
+    
+            # 3. Load Mask & Map to Nested Regions
+            mask = self._load_nifti(p_id, "seg")
+            
+            # Whole Tumor (WT): Includes all tumor labels (1, 2, 4)
+            wt = (mask > 0).astype(np.float32)
+            # Tumor Core (TC): Includes necrotic and enhancing tumor (1, 4)
+            tc = np.logical_or(mask == 1, mask == 4).astype(np.float32)
+            # Enhancing Tumor (ET): Just the active enhancing core (Label 4)
+            et = (mask == 4).astype(np.float32)
+    
+            combined_mask = np.stack([wt, tc, et], axis=0)
+    
+            # Apply Padding to ensure consistent dimensions (e.g., 160, 240, 240)
+            image = self.pad_image(image)
+            combined_mask = self.pad_image(combined_mask)
+    
+            # 4. Z-Score Normalization (Per Channel)
+            image = self.normalize(image)
+    
+            # Convert to Tensors for PyTorch processing
+            image = torch.from_numpy(image).float()
+            combined_mask = torch.from_numpy(combined_mask).float()
+    
+            return image, combined_mask
+    
+        except FileNotFoundError:
+            # Log the error and skip this patient index
+            print(f"⚠️ Warning: Skipping patient {self.patient_list[idx]} due to missing or inconsistent naming.")
+            
+            # Safely increment index to try the next sample
+            next_idx = (idx + 1) % len(self.patient_list)
+            return self.__getitem__(next_idx)
+            
     def normalize(self, image):
         """Standard Z-score normalization per modality[cite: 1]."""
         for i in range(image.shape[0]):
