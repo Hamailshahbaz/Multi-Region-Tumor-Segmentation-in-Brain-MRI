@@ -1,10 +1,4 @@
 # --- Dataset Directories ---
-# Ignore the raw and processed data folders
-data/
-datasets/
-*.nii
-*.nii.gz
-*.h5
 
 # --- Python Environment & Cache ---
 __pycache__/
