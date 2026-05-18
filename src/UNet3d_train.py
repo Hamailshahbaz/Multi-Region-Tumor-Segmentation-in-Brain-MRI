@@ -1,118 +1,19 @@
-import os
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 import torch.optim as optim
 import numpy as np
-import matplotlib
-matplotlib.use('Agg')  # Non-interactive backend for saving plots
-import matplotlib.pyplot as plt
-
-from data_loader import get_dataloader
-from model import AttentionUNet25D, UNet25D
-
-class DiceLoss(nn.Module):
-    def __init__(self, smooth=1e-6):
-        super(DiceLoss, self).__init__()
-        self.smooth = smooth
-
-    def forward(self, predict, target):
-        predict = predict.contiguous().view(predict.size(0), predict.size(1), -1)
-        target = target.contiguous().view(target.size(0), target.size(1), -1)
-
-        intersection = (predict * target).sum(dim=2)
-        dice_score = (2. * intersection + self.smooth) / (
-            predict.sum(dim=2) + target.sum(dim=2) + self.smooth
-        )
-        return 1. - dice_score.mean()
-
-
-class HybridLoss(nn.Module):
-    def __init__(self, dice_weight=0.5, bce_weight=0.5):
-        super(HybridLoss, self).__init__()
-        self.dice = DiceLoss()
-        self.dice_weight = dice_weight
-        self.bce_weight = bce_weight
-
-    def forward(self, predict, target):
-        bce_loss = F.binary_cross_entropy(predict, target.float())
-        dice_loss = self.dice(predict, target)
-        return (self.bce_weight * bce_loss) + (self.dice_weight * dice_loss)
-
-
-def get_loss(loss_name: str):
-    loss_name = loss_name.lower().strip()
-    if loss_name in ["ce", "bce", "crossentropy"]:
-        return nn.BCELoss()
-    elif loss_name == "dice":
-        return DiceLoss()
-    elif loss_name in ["hybrid", "combined"]:
-        return HybridLoss(dice_weight=0.5, bce_weight=0.5)
-    else:
-        raise ValueError(f"Unknown loss: '{loss_name}'. Choose from: 'ce', 'dice', 'hybrid'.")
-
-
-def dice_coefficient_2d(prediction, target, smooth=1e-6):
-    prediction = (prediction > 0.5).float()
-    intersection = (prediction * target).sum(dim=(2, 3))
-    union = prediction.sum(dim=(2, 3)) + target.sum(dim=(2, 3))
-    dice = (2. * intersection + smooth) / (union + smooth)
-    return dice.mean()
-
-
-def dice_per_class(prediction, target, smooth=1e-6):
-    """Returns Dice for each class separately: [WT, TC, ET]"""
-    prediction = (prediction > 0.5).float()
-    intersection = (prediction * target).sum(dim=(2, 3))
-    union = prediction.sum(dim=(2, 3)) + target.sum(dim=(2, 3))
-    dice = (2. * intersection + smooth) / (union + smooth)
-    return dice.mean(dim=0).cpu().numpy()  # (3,)
-
-def visualize_predictions(images, masks, outputs, epoch, loss_name, model_name, out_dir="results/plots"):
-    """
-    Saves a figure with: input (first 4 channels), ground truth, and prediction.
-    images:  (B, 12, H, W)
-    masks:   (B, 3, H, W)
-    outputs: (B, 3, H, W)
-    """
-    os.makedirs(out_dir, exist_ok=True)
-    
-    # Take first sample from batch
-    img = images[0].cpu().numpy()   # (12, H, W)
-    mask = masks[0].cpu().numpy()   # (3, H, W)
-    pred = outputs[0].cpu().detach().numpy()  # (3, H, W)
-    pred_bin = (pred > 0.5).astype(np.float32)
-
-    fig, axes = plt.subplots(3, 3, figsize=(10, 10))
-    class_names = ["Whole Tumor (WT)", "Tumor Core (TC)", "Enhancing Tumor (ET)"]
-
-    for i in range(3):
-        # Show one input channel (e.g., FLAIR center slice = channel 1)
-        axes[i, 0].imshow(img[1], cmap='gray')
-        axes[i, 0].set_title(f"Input (FLAIR) - {class_names[i]}")
-        axes[i, 0].axis('off')
-
-        axes[i, 1].imshow(mask[i], cmap='jet', vmin=0, vmax=1)
-        axes[i, 1].set_title("Ground Truth")
-        axes[i, 1].axis('off')
-
-        axes[i, 2].imshow(pred_bin[i], cmap='jet', vmin=0, vmax=1)
-        axes[i, 2].set_title(f"Prediction (Dice-based)")
-        axes[i, 2].axis('off')
-
-    plt.tight_layout()
-    save_path = os.path.join(out_dir, f"{loss_name}_{model_name}_epoch{epoch:03d}.png")
-    plt.savefig(save_path, dpi=150)
-    plt.close(fig)
-    print(f"  [Vis] Saved prediction plot: {save_path}")
-
+from data_loader import get_dataloader_3d
+from model import AttentionUNet3D, UNet3D
+from losses import get_loss, dice_per_class, dice_coefficient_3d
+import os
+from visualize import visualize_predictions
 
 def train_model(loss_name="hybrid", model_name="attention_unet", viz_every=5):
     # 1. Configuration
-    data_dir = '/kaggle/input/datasets/awsaf49/brats20-dataset-training-validation/BraTS2020_TrainingData/MICCAI_BraTS2020_TrainingData'
+    data_dir = '/content/data/BraTS20/BraTS2020_TrainingData/MICCAI_BraTS2020_TrainingData/'
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     num_epochs = 25
-    batch_size = 16
+    batch_size = 1
     learning_rate = 1e-4
 
     # Create output directories
@@ -120,13 +21,13 @@ def train_model(loss_name="hybrid", model_name="attention_unet", viz_every=5):
     os.makedirs("results/plots", exist_ok=True)
 
     # 2. DataLoaders (same as repo)
-    train_loader, val_loader = get_dataloader(data_dir, batch_size=batch_size)
+    train_loader, val_loader = get_dataloader_3d(data_dir, batch_size=batch_size)
 
     # 3. Model
     if model_name.lower() == "attention_unet":
-        model = AttentionUNet25D(in_channels=12, out_channels=3).to(device)
+        model = UNet3D(in_channels=4, out_channels=3).to(device)
     elif model_name.lower() == "unet":
-        model = UNet25D(in_channels=12, out_channels=3).to(device)
+        model = UNet3D(in_channels=4, out_channels=3).to(device)
     else:
         raise ValueError(f"Unknown model: {model_name}")
 
@@ -157,7 +58,7 @@ def train_model(loss_name="hybrid", model_name="attention_unet", viz_every=5):
             optimizer.step()
 
             train_losses.append(loss.item())
-            train_dices.append(dice_coefficient_2d(outputs, masks).item())
+            train_dices.append(dice_coefficient_3d(outputs, masks).item())
 
         model.eval()
         val_losses, val_dices = [], []
@@ -170,7 +71,7 @@ def train_model(loss_name="hybrid", model_name="attention_unet", viz_every=5):
 
                 loss = criterion(outputs, masks)
                 val_losses.append(loss.item())
-                val_dices.append(dice_coefficient_2d(outputs, masks).item())
+                val_dices.append(dice_coefficient_3d(outputs, masks).item())
 
                 # Store first batch for visualization
                 if batch_idx == 0:
@@ -199,7 +100,7 @@ def train_model(loss_name="hybrid", model_name="attention_unet", viz_every=5):
             best_val_dice = avg_val_dice
             best_epoch = epoch
 
-            save_path = f"results/models/best_{loss_name}_{model_name}_25d.pth"
+            save_path = f"results/models/best_{loss_name}_{model_name}_3d.pth"
             torch.save({
                 'epoch': epoch,
                 'model_state_dict': model.state_dict(),
@@ -212,7 +113,7 @@ def train_model(loss_name="hybrid", model_name="attention_unet", viz_every=5):
         print("-" * 60)
 
     print(f"\nTraining complete. Best Val Dice: {best_val_dice:.4f} at Epoch {best_epoch}")
-    print(f"Best model saved at: results/models/best_{loss_name}_{model_name}_25d.pth")
+    print(f"Best model saved at: results/models/best_{loss_name}_{model_name}_3d.pth")
 
 
 if __name__ == "__main__":
@@ -220,4 +121,4 @@ if __name__ == "__main__":
         print(f"\n{'='*60}")
         print(f" STARTING EXPERIMENT: {loss.upper()} LOSS ")
         print(f"{'='*60}")
-        train_model(loss_name=loss, model_name="attention_unet", viz_every=5)
+        train_model(loss_name=loss, model_name="unet", viz_every=5)

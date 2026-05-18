@@ -1,3 +1,4 @@
+#src/data_loader.py
 import os
 import torch
 import numpy as np
@@ -17,22 +18,22 @@ class BraTSDataset3D(Dataset):
     def _load_nifti(self, patient_id, modality):
         patient_path = os.path.join(self.root_dir, patient_id)
         path = os.path.join(patient_path, f"{patient_id}_{modality}.nii")
-        
+
         if not os.path.exists(path):
             if os.path.exists(path + ".gz"): path += ".gz"
             else: raise FileNotFoundError(f"Missing {modality} in {patient_path}")
-        
+
         return nib.load(path).get_fdata()
 
     def _center_crop(self, data, target_shape):
         """Crops the center of a 3D volume."""
         h, w, d = data.shape
         th, tw, td = target_shape
-        
+
         start_h = (h - th) // 2
         start_w = (w - tw) // 2
         start_d = (d - td) // 2
-        
+
         return data[start_h:start_h+th, start_w:start_w+tw, start_d:start_d+td]
 
     def __getitem__(self, idx):
@@ -61,7 +62,7 @@ class BraTSDataset3D(Dataset):
             wt = (mask_vol > 0).astype(np.float32)
             tc = np.logical_or(mask_vol == 1, mask_vol == 4).astype(np.float32)
             et = (mask_vol == 4).astype(np.float32)
-            
+
             # Shape: (3, 128, 128, 128)
             combined_mask = np.stack([wt, tc, et], axis=0)
 
@@ -72,7 +73,7 @@ class BraTSDataset3D(Dataset):
             return self.__getitem__((idx + 1) % len(self.patient_list))
 
 def get_dataloader_3d(data_dir, batch_size=2):
-    all_patients = sorted([f for f in os.listdir(data_dir) 
+    all_patients = sorted([f for f in os.listdir(data_dir)
                           if os.path.isdir(os.path.join(data_dir, f)) and f.startswith('BraTS20')])
 
     train_pts, val_pts = train_test_split(all_patients, test_size=0.2, random_state=42)

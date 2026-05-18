@@ -1,5 +1,3 @@
-# --- Dataset Directories ---
-
 # --- Python Environment & Cache ---
 __pycache__/
 *.py[cod]
@@ -14,3 +12,12 @@ env/
 .vscode/
 .idea/
 .ipynb_checkpoints/
+
+data/BraTS2020_TrainingData/
+data/BraTS2020_ValidationData/
+data/BraTS2020_TrainingData.zip
+
+# Ignore notebooks and logs
+*.ipynb
+texput.log
+
