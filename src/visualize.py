@@ -3,47 +3,7 @@ import os
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
-# Import the class you just wrote
 from data_loader import BraTSDataset3D
-
-def show_slices(patient_id, data_dir, slice_idx=75):
-    # Initialize dataset for just one patient
-    dataset = BraTSDataset3D(patient_list=[patient_id], root_dir=data_dir)
-    
-    # Get the data (This calls  __getitem__ function)
-    image, mask = dataset[0] 
-    
-    # Convert tensors back to numpy for plotting
-    img = image.numpy()
-    msk = mask.numpy()
-    
-    # Create a grid: 2 rows (Input vs Output), 4 columns
-    fig, axes = plt.subplots(2, 4, figsize=(18, 10))
-    
-    # 1. Plot Inputs (Modalities)
-    modalities = ['FLAIR', 'T1ce', 'T1', 'T2']
-    for i in range(4):
-        axes[0, i].imshow(img[i, slice_idx, :, :], cmap='gray')
-        axes[0, i].set_title(f"Input: {modalities[i]}")
-        axes[0, i].axis('off')
-
-    # 2. Plot Outputs (Nested Masks)
-    # We use 'jet' or 'Reds' to make the mask stand out
-    targets = ['Whole Tumor (WT)', 'Tumor Core (TC)', 'Enhancing Tumor (ET)']
-    for i in range(3):
-        axes[1, i].imshow(msk[i, slice_idx, :, :], cmap='Reds')
-        axes[1, i].set_title(f"Target Mask: {targets[i]}")
-        axes[1, i].axis('off')
-
-    # 3. Final Comparison (Overlay)
-    axes[1, 3].imshow(img[1, slice_idx, :, :], cmap='gray') # T1ce background
-    axes[1, 3].imshow(msk[2, slice_idx, :, :], cmap='Reds', alpha=0.5) # ET Overlay
-    axes[1, 3].set_title("Check: ET inside T1ce")
-    axes[1, 3].axis('off')
-
-    plt.suptitle(f"Visualization for {patient_id} at Slice {slice_idx}")
-    plt.tight_layout()
-    plt.show()
 
 def visualize_predictions(images, masks, outputs, epoch, loss_name, model_name, out_dir="results/plots"):
     os.makedirs(out_dir, exist_ok=True)
@@ -78,9 +38,46 @@ def visualize_predictions(images, masks, outputs, epoch, loss_name, model_name, 
     plt.close(fig)
     print(f"  [Vis] Saved prediction plot: {save_path}")
 
+
+def plot_and_save(t1ce_slice, gt_mask, pred_mask, save_path, patient_id, slice_idx):
+    """
+    Generates a clean grid comparing ground truths against model predictions.
+    Added from dummy.py for unified tracking of evaluation steps.
+    """
+    fig, axes = plt.subplots(2, 4, figsize=(16, 8))
+    fig.suptitle(f"Patient: {patient_id} (Axial Slice: {slice_idx})", fontsize=16, fontweight='bold')
+    
+    channels = ["Whole Tumor (WT)", "Tumor Core (TC)", "Enhancing Tumor (ET)"]
+    colors = ['Reds', 'Oranges', 'Purples']
+    
+    axes[0, 0].imshow(t1ce_slice, cmap='gray')
+    axes[0, 0].set_title("Base T1ce MRI")
+    axes[0, 0].axis('off')
+    
+    axes[1, 0].imshow(t1ce_slice, cmap='gray')
+    axes[1, 0].set_title("Base T1ce MRI")
+    axes[1, 0].axis('off')
+    
+    for i in range(3):
+        axes[0, i+1].imshow(t1ce_slice, cmap='gray')
+        axes[0, i+1].imshow(gt_mask[i], cmap=colors[i], alpha=0.5 if np.sum(gt_mask[i]) > 0 else 0)
+        axes[0, i+1].set_title(f"GT: {channels[i]}")
+        axes[0, i+1].axis('off')
+        
+        axes[1, i+1].imshow(t1ce_slice, cmap='gray')
+        axes[1, i+1].imshow(pred_mask[i], cmap=colors[i], alpha=0.5 if np.sum(pred_mask[i]) > 0 else 0)
+        axes[1, i+1].set_title(f"Pred: {channels[i]}")
+        axes[1, i+1].axis('off')
+        
+    plt.tight_layout()
+    plt.savefig(save_path, bbox_inches='tight', dpi=150)
+    plt.close()
+
+
 if __name__ == "__main__":
     # Change this path to your actual data location
-    DATA_PATH = "/home/hamail/Multi-Region-Tumor-Segmentation-in-Brain-MRI/data/MICCAI_BraTS2020_TrainingData/" 
+    DATA_PATH = "/data/MICCAI_BraTS2020_TrainingData/" 
     TEST_PATIENT = "BraTS20_Training_001"
     
-    show_slices(TEST_PATIENT, DATA_PATH, slice_idx=80)
+    # Note: If using show_slices here, ensure it's defined or imported.
+    # show_slices(TEST_PATIENT, DATA_PATH, slice_idx=80)
